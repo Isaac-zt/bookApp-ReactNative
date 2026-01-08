@@ -8,9 +8,7 @@
       return (
         <View style={[{
             backgroundColor: theme.background,}, style]}
-            {...props}>
-          
-        </View>
+            {...props} />
       )
     }
     

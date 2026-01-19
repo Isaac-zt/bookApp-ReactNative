@@ -5,7 +5,7 @@ import { ID } from "appwrite";
 export const UserContext = createContext()
 
 export function UserProvider({children}) {
-    const [user, setUser] = useState()
+    const [user, setUser] = useState(null)
 
     async function login( email, password) {
         try {
@@ -13,7 +13,7 @@ export function UserProvider({children}) {
             const response = await account.get()
             setUser(response)
         } catch (error) {
-            console.log(error.message);
+            throw Error (error.message);
         }
     }
 
@@ -22,7 +22,7 @@ export function UserProvider({children}) {
             await account.create(ID.unique(), email, password)
             await login(email, password)
         } catch (error) {
-            console.log(error.message);
+            throw Error (error.message);
         }
     }
 

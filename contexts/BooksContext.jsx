@@ -1,96 +1,113 @@
-import { createContext, useEffect, useState } from "react";
-import { databases, client } from "../lib/appwrite";
-import { ID, Permission, Role } from "appwrite";
-import { useUser } from "../hooks/useUser";
+import { createContext, useEffect, useState } from "react"
+import { databases, client } from "../lib/appwrite"
+import { ID, Permission, Query, Role } from "react-native-appwrite"
+import { useUser } from "../hooks/useUser"
 
-const DATABASE_ID = "6970e661002132964979"
-const COLLECTION_ID = "books"
+const DATABASE_ID = "67cdd0c9002307459723"
+const COLLECTION_ID = "67cdd0cf00307157221e"
 
-export const BooksContext = createContext();
+export const BooksContext = createContext()
 
-export function BooksProvider({ children }) {
-    const [books, setBooks] = useState([]);
-    const { user } = useUser();
+export function BooksProvider({children}) {
+  const [books, setBooks] = useState([])
+  const { user } = useUser()
 
-    async function fetchBooks() {
-        try {
-            const response = await databases.listDocuments(DATABASE_ID, COLLECTION_ID);
-            setBooks(response.documents || []);
-            return response.documents || [];
-        } catch (error) {
-            console.error('Fetch books error', error);
-            throw error;
+  async function fetchBooks() {
+    try {
+      const response = await databases.listDocuments(
+        DATABASE_ID, 
+        COLLECTION_ID,
+        [
+          Query.equal('userId', user.$id)
+        ]
+      )
+
+      setBooks(response.documents)
+      console.log(response.documents)
+    } catch (error) {
+      console.error(error.message)
+    }
+  }
+
+  async function fetchBookById(id) {
+    try {
+      const response = await databases.getDocument(
+        DATABASE_ID,
+        COLLECTION_ID,
+        id
+      )
+
+      return response
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
+
+  async function createBook(data) {
+    try {
+      await databases.createDocument(
+        DATABASE_ID,
+        COLLECTION_ID,
+        ID.unique(),
+        {...data, userId: user.$id},
+        [
+          Permission.read(Role.user(user.$id)),
+          Permission.update(Role.user(user.$id)),
+          Permission.delete(Role.user(user.$id)),
+        ]
+      )
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
+
+  async function deleteBook(id) {
+    try {
+      await databases.deleteDocument(
+        DATABASE_ID,
+        COLLECTION_ID,
+        id,
+      )
+    } catch (error) {
+      console.log(error.message)
+    }
+  }
+
+  useEffect(() => {
+    let unsubscribe
+    const channel = `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents`
+
+    if (user) {
+      fetchBooks()
+
+      unsubscribe = client.subscribe(channel, (response) => {
+        const { payload, events } = response
+        console.log(events)
+
+        if (events[0].includes("create")) {
+          setBooks((prevBooks) => [...prevBooks, payload])
         }
+
+        if (events[0].includes("delete")) {
+          setBooks((prevBooks) => prevBooks.filter((book) => book.$id !== payload.$id))
+        }
+      })
+
+    } else {
+      setBooks([])
     }
 
-    async function fetchBookById(id) {
-        try {
-            const book = await databases.getDocument(DATABASE_ID, COLLECTION_ID, id);
-            return book;
-        } catch (error) {
-            console.error('Fetch book error', error);
-            throw error;
-        }
+    return () => {
+      if (unsubscribe) unsubscribe()
     }
 
-    async function createBook(data) {
-        try {
-            const newBook = await databases.createDocument(
-             DATABASE_ID,
-             COLLECTION_ID,
-             ID.unique(),
-             {...data, userId: user.$id},
-             [
-                Permission.read(Role.user(user.$id)),
-                Permission.update(Role.user(user.$id)),
-                Permission.delete(Role.user(user.$id)),
-             ]   
-            )
-            setBooks(prev => [newBook, ...prev]);
-            return newBook;
-        } catch (error) {
-            console.error('Create book error', error);
-            throw error;
-        }
-    }
+  }, [user])
 
-    async function deleteBook(id) {
-        try {
-            await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, id);
-            setBooks(prev => prev.filter(b => b.$id !== id));
-        } catch (error) {
-            console.error('Delete book error', error);
-            throw error;
-        }
-    }
-
-    useEffect(() => {
-        let unsubscribe
-        const channel = `databases.${DATABASE_ID}.collections.${COLLECTION_ID}.documents`
-        
-        if (user) {
-            fetchBooks()
-
-            unsubscribe = client.subscribe(channel, (response) => {
-                const { payload, events } = response;
-
-                if (events[0].includes('create')) {
-                    setBooks((prevBooks) => [...prevBooks, payload]);
-                }
-            })
-        } else {
-            setBooks([])
-        }
-
-        return () => {
-            if (unsubscribe) unsubscribe();
-        }
-
-    }, [user])
-
-    return (
-        <BooksContext.Provider value={{books, fetchBooks, fetchBookById, createBook, deleteBook}}>
-            {children}
-        </BooksContext.Provider>
-    )
+  return (
+    <BooksContext.Provider 
+      value={{ books, fetchBooks, fetchBookById, createBook, deleteBook }}
+    >
+      {children}
+    </BooksContext.Provider>
+  )
 }
